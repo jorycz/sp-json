@@ -216,8 +216,7 @@ func unmarshalData(data []byte) (*interface{}, error) {
 	var result interface{}
 	err := json.Unmarshal(data, &result)
 	if err != nil {
-		slog.Error("unmarshalData error", "error", err)
-		slog.Debug("unmarshalData error", "data", string(data[:]))
+		slog.Debug("unmarshal JSON data error", "data", string(data[:]))
 		return nil, err
 	}
 	return &result, nil
