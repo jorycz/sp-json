@@ -44,7 +44,7 @@ func (p *JSONParser) GetValueOfJsonKeyOnPath(jsonData []byte, jsonPath []string)
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	directPath = append(directPath, jsonPath...)
+	directPath = jsonPath
 	dataMap := processJsonData(jsonData)
 	if dataMap != nil {
 		if val, ok := searchKeyInPath(dataMap); ok {
