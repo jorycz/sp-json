@@ -14,7 +14,10 @@ func main() {
 	payload := testJsonData()
 
 	// Find key value using full JSON search - optionally limit result with another key using underThisAnotherKey
-	jsonValue := p.GetValueOfJsonKeyOptionallyUnderAnotherKey(payload, "properties", "allOf")
+	jsonValue, errKey := p.GetValueOfJsonKeyOptionallyUnderAnotherKey(payload, "properties", "allOf")
+	if errKey != nil {
+		slog.Error("ERROR", "method KEY", "msg", errKey)
+	}
 	if jsonValue != nil {
 		slog.Info("found JSON - KEY", "data", jsonValue)
 	} else {
@@ -22,7 +25,10 @@ func main() {
 	}
 
 	// Find key value using path
-	jsonValueFromPath := p.GetValueOfJsonKeyOnPath(payload, []string{"properties", "nc:Vehicle", "oneOf", "[0]"})
+	jsonValueFromPath, errPath := p.GetValueOfJsonKeyOnPath(payload, []string{"properties", "nc:Vehicle", "oneOf", "[0]"})
+	if errPath != nil {
+		slog.Error("ERROR", "method PATH", "msg", errKey)
+	}
 	if jsonValueFromPath != nil {
 		slog.Info("found JSON - PATH", "data", jsonValueFromPath)
 	} else {
@@ -30,8 +36,11 @@ func main() {
 	}
 
 	// Get raw JSON
-  	// rawJson := p.GetRawJson(payload)
-  	// slog.Info("JSON - RAW", "data", rawJson)
+  	rawJson, errRaw := p.GetRawJson(payload)
+	if errRaw != nil {
+		slog.Error("ERROR", "method RAW", "msg", errKey)
+	}
+  	slog.Info("JSON - RAW", "data", rawJson)
 }
 
 

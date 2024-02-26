@@ -22,44 +22,44 @@ type JSONParser struct {
 
 // somewhereUnderThisAnotherKey - is optional. Use "" (empty string) if you want to search whole JSON for key.
 // Always returns an array if any result is found
-func (p *JSONParser) GetValueOfJsonKeyOptionallyUnderAnotherKey(jsonData []byte, jsonKey string, somewhereUnderThisAnotherKey string) interface{} {
+func (p *JSONParser) GetValueOfJsonKeyOptionallyUnderAnotherKey(jsonData []byte, jsonKey string, somewhereUnderThisAnotherKey string) (interface{}, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	dataMap := processJsonData(jsonData)
+	dataMap, err := processJsonData(jsonData)
 	if dataMap != nil {
 		underKeyFound = make(map[string]bool)
 		allKeyValues = make([]interface{}, 0)
 		searchKeyAnywhereInMap(jsonKey, somewhereUnderThisAnotherKey, dataMap)
 		if len(allKeyValues) > 0 {
 			// Always return array
-			return allKeyValues
+			return allKeyValues, err
 		}
 	}
 	slog.Debug("JSON value not found", "key", jsonKey)
-	return nil
+	return nil, err
 }
 
-func (p *JSONParser) GetValueOfJsonKeyOnPath(jsonData []byte, jsonPath []string) interface{} {
+func (p *JSONParser) GetValueOfJsonKeyOnPath(jsonData []byte, jsonPath []string) (interface{}, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	directPath = jsonPath
-	dataMap := processJsonData(jsonData)
+	dataMap, err := processJsonData(jsonData)
 	if dataMap != nil {
 		if val, ok := searchKeyInPath(dataMap); ok {
-			return val
+			return val, err
 		}
 	}
 	slog.Debug("JSON value not found", "path", strings.Join(jsonPath, " > "))
-	return nil
+	return nil, err
 }
 
-func (p *JSONParser) GetRawJson(jsonData []byte) interface{} {
+func (p *JSONParser) GetRawJson(jsonData []byte) (interface{}, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	result := unmarshalData(jsonData)
-	return *result
+	result, err := unmarshalData(jsonData)
+	return *result, err
 }
 
 
@@ -157,14 +157,14 @@ func searchKeyInPath(jsonData interface{}) (interface{}, bool) {
 }
 
 // Prepare JSON data as a map - always
-func processJsonData(data []byte) map[string]interface{} {
+func processJsonData(data []byte) (map[string]interface{}, error) {
 	// JSON can hold:
 	// {}
 	// []
 	// number, string
 	// false, null, true
 
-	result := unmarshalData(data)
+	result, err := unmarshalData(data)
 	// I have a hack here - some JSON starts with [] (array) or special strings from JSON standard, so create map here to start processing always as a map
 	if result != nil {
 		tmpMap := make(map[string]interface{})
@@ -172,7 +172,7 @@ func processJsonData(data []byte) map[string]interface{} {
 		case map[string]interface{}:
 			slog.Debug("DATA", "type map", v)
 			if dataMap, ok := (*result).(map[string]interface{}); ok {
-				return dataMap
+				return dataMap, nil
 			}
 		case []interface{}:
 			slog.Debug("JSON data", "type array", v)
@@ -180,46 +180,45 @@ func processJsonData(data []byte) map[string]interface{} {
 				tmpMap["k"] = dataMap
 				// Insert fake key to requested jsonPath
 				directPath = append([]string{"k"}, directPath...)
-				return tmpMap
+				return tmpMap, nil
 			}
 		case float64:
 			slog.Debug("JSON data", "type number", v)
 			if dataMap, ok := (*result).(float64); ok {
 				tmpMap["k"] = dataMap
-				return tmpMap
+				return tmpMap, nil
 			}
 		case string:
 			slog.Info("JSON data", "type string", v)
 			if dataMap, ok := (*result).(string); ok {
 				tmpMap["k"] = dataMap
-				return tmpMap
+				return tmpMap, nil
 			}
 		case bool:
 			slog.Debug("JSON data", "type bool", v)
 			if dataMap, ok := (*result).(bool); ok {
 				tmpMap["k"] = dataMap
-				return tmpMap
+				return tmpMap, nil
 			}
 		case nil:
 			slog.Debug("JSON data", "type NULL", v)
 			tmpMap["k"] = "null"
-			return tmpMap
+			return tmpMap, nil
 		default:
-			slog.Info("JSON data type not recognized", "type", fmt.Sprintf("%T", *result))
+			err = fmt.Errorf("JSON data type not recognized. Type: %v", fmt.Sprintf("%T", *result))
 		}
 	}
-	slog.Error("Invalid JSON.")
-	return nil
+	return nil, err
 }
 
 // Get raw JSON string
-func unmarshalData(data []byte) *interface{} {
+func unmarshalData(data []byte) (*interface{}, error) {
 	var result interface{}
 	err := json.Unmarshal(data, &result)
 	if err != nil {
 		slog.Error("unmarshalData error", "error", err)
 		slog.Debug("unmarshalData error", "data", string(data[:]))
-		return nil
+		return nil, err
 	}
-	return &result
+	return &result, nil
 }
