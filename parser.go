@@ -20,32 +20,13 @@ type JSONParser struct {
 	lock sync.Mutex
 }
 
-// somewhereUnderThisAnotherKey - is optional. Use "" (empty string) if you want to search whole JSON for key.
-// Always returns an array if any result is found
-func (p *JSONParser) GetValueOfJsonKeyOptionallyUnderAnotherKey(jsonData []byte, jsonKey string, somewhereUnderThisAnotherKey string) (interface{}, error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	dataMap, err := processJsonData(jsonData)
-	if dataMap != nil {
-		underKeyFound = make(map[string]bool)
-		allKeyValues = make([]interface{}, 0)
-		searchKeyAnywhereInMap(jsonKey, somewhereUnderThisAnotherKey, dataMap)
-		if len(allKeyValues) > 0 {
-			// Always return array
-			return allKeyValues, err
-		}
-	}
-	slog.Debug("JSON value not found", "key", jsonKey)
-	return nil, err
-}
 
 func (p *JSONParser) GetValueOfJsonKeyOnPath(jsonData []byte, jsonPath []string) (interface{}, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	directPath = jsonPath
-	dataMap, err := processJsonData(jsonData)
+	dataMap, err := createMapFromJsonData(jsonData)
 	if dataMap != nil {
 		if val, ok := searchKeyInPath(dataMap); ok {
 			return val, err
@@ -62,55 +43,34 @@ func (p *JSONParser) GetRawJson(jsonData []byte) (interface{}, error) {
 	return *result, err
 }
 
+// somewhereUnderThisAnotherKey - is optional. Use "" (empty string) if you want to search whole JSON for key.
+// Always returns an array if any result is found
+func (p *JSONParser) GetValueOfJsonKeyOptionallyUnderAnotherKey(jsonData []byte, jsonKey string, somewhereUnderThisAnotherKey string) (interface{}, error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
-// HELPERS //
-// HELPERS //
-// HELPERS //
-
-
-// Recursive function to search for a key in a nested map. It is possible specify required root key which could be somewhere in the middle
-func searchKeyAnywhereInMap(key string, mustBeUnderKey string, dataMap map[string]interface{}) {
-	// Check if the key exists in the current level of the map
-	if value, ok := dataMap[key]; ok {
-		if len(mustBeUnderKey) > 0 {
-			if _, ok := underKeyFound[mustBeUnderKey]; ok {
-				allKeyValues = append(allKeyValues, value)
-			}
-		} else {
-			allKeyValues = append(allKeyValues, value)
+	dataMap, err := createMapFromJsonData(jsonData)
+	if dataMap != nil {
+		underKeyFound = make(map[string]bool)
+		allKeyValues = make([]interface{}, 0)
+		searchKeyAnywhereInMap(jsonKey, somewhereUnderThisAnotherKey, dataMap)
+		if len(allKeyValues) > 0 {
+			// Always return array
+			return allKeyValues, err
 		}
 	}
-	// Iterate over the values in the map
-	for k, value := range dataMap {
-		// Set current root key - reason I'm using map is that I want to get all keys I'm searching for from this level
-		underKeyFound[k] = true
-		// Check if the value is a nested map
-		if nestedMap, ok := value.(map[string]interface{}); ok {
-			// Recursively search the nested map for the key
-			searchKeyAnywhereInMap(key, mustBeUnderKey, nestedMap)
-		}
-		if nestedArray, ok := value.([]interface{}); ok {
-			// Recursively search the nested array for the key
-			searchKeyAnywhereInArray(key, mustBeUnderKey, nestedArray)
-		}
-		delete(underKeyFound, k)
-	}
+	slog.Debug("JSON value not found", "key", jsonKey)
+	return nil, err
 }
 
-// Helper for searchKeyAnywhereInMap
-func searchKeyAnywhereInArray(key string, mustBeUnderKey string, dataArray []interface{}) {
-	for _, value := range dataArray {
-		if nestedArray, ok := value.([]interface{}); ok {
-			searchKeyAnywhereInArray(key, mustBeUnderKey, nestedArray)
-		}
-		if nestedMap, ok := value.(map[string]interface{}); ok {
-			searchKeyAnywhereInMap(key, mustBeUnderKey, nestedMap)
-		}
-	}
-}
+
+// HELPERS //
+// HELPERS //
+// HELPERS //
 
 
 // Search for value on particular JSON path
+// Helper for GetValueOfJsonKeyOnPath
 func searchKeyInPath(jsonData interface{}) (interface{}, bool) {
 	// Final interface to return, if any
 	var finalKeyValue interface{}
@@ -156,8 +116,54 @@ func searchKeyInPath(jsonData interface{}) (interface{}, bool) {
 	return nil, false
 }
 
-// Prepare JSON data as a map - always
-func processJsonData(data []byte) (map[string]interface{}, error) {
+
+// Recursive function to search for a key in a nested map. It is possible specify required root key which could be somewhere in the middle
+// Helper for GetValueOfJsonKeyOptionallyUnderAnotherKey
+func searchKeyAnywhereInMap(key string, mustBeUnderKey string, dataMap map[string]interface{}) {
+	// Check if the key exists in the current level of the map
+	if value, ok := dataMap[key]; ok {
+		if len(mustBeUnderKey) > 0 {
+			if _, ok := underKeyFound[mustBeUnderKey]; ok {
+				allKeyValues = append(allKeyValues, value)
+			}
+		} else {
+			allKeyValues = append(allKeyValues, value)
+		}
+	}
+	// Iterate over the values in the map
+	for k, value := range dataMap {
+		// Set current root key - reason I'm using map is that I want to get all keys I'm searching for from this level
+		underKeyFound[k] = true
+		// Check if the value is a nested map
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			// Recursively search the nested map for the key
+			searchKeyAnywhereInMap(key, mustBeUnderKey, nestedMap)
+		}
+		if nestedArray, ok := value.([]interface{}); ok {
+			// Recursively search the nested array for the key
+			searchKeyAnywhereInArray(key, mustBeUnderKey, nestedArray)
+		}
+		delete(underKeyFound, k)
+	}
+}
+
+// Helper for searchKeyAnywhereInMap
+func searchKeyAnywhereInArray(key string, mustBeUnderKey string, dataArray []interface{}) {
+	for _, value := range dataArray {
+		if nestedArray, ok := value.([]interface{}); ok {
+			searchKeyAnywhereInArray(key, mustBeUnderKey, nestedArray)
+		}
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			searchKeyAnywhereInMap(key, mustBeUnderKey, nestedMap)
+		}
+	}
+}
+
+// General helpers
+
+// Prepare JSON data always as a map
+// If it's not a map insert content of JSON to key k = { value }
+func createMapFromJsonData(data []byte) (map[string]interface{}, error) {
 	// JSON can hold:
 	// {}
 	// []
@@ -189,7 +195,7 @@ func processJsonData(data []byte) (map[string]interface{}, error) {
 				return tmpMap, nil
 			}
 		case string:
-			slog.Info("JSON data", "type string", v)
+			slog.Debug("JSON data", "type string", v)
 			if dataMap, ok := (*result).(string); ok {
 				tmpMap["k"] = dataMap
 				return tmpMap, nil
@@ -201,7 +207,7 @@ func processJsonData(data []byte) (map[string]interface{}, error) {
 				return tmpMap, nil
 			}
 		case nil:
-			slog.Debug("JSON data", "type NULL", v)
+			slog.Error("JSON data error", "type nil", v)
 			tmpMap["k"] = "null"
 			return tmpMap, nil
 		default:
@@ -216,7 +222,7 @@ func unmarshalData(data []byte) (*interface{}, error) {
 	var result interface{}
 	err := json.Unmarshal(data, &result)
 	if err != nil {
-		slog.Debug("unmarshal JSON data error", "data", string(data[:]))
+		slog.Error("unmarshal JSON data error", "data", string(data[:]))
 		return nil, err
 	}
 	return &result, nil
